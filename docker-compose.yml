@@ -66,7 +66,9 @@ services:
       - MSSQL_SA_PASSWORD=aA123456!
     
     ports:
-      - "1434:1433"
+      - "1433:1433"
+
+    mem_limit: 5G
     
     # Azure SQL Edge has lower memory requirements and should run under current Docker Desktop limits
     
