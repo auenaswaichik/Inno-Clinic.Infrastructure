@@ -1,0 +1,198 @@
+version: '3.9'
+
+services:
+
+
+  keycloak:
+
+    image: quay.io/keycloak/keycloak:23.0.6
+
+    container_name: keycloak
+
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://keycloak-db:5432/keycloak
+      - KC_DB_USERNAME=keycloak
+      - KC_DB_PASSWORD=keycloak
+
+    command: start-dev
+
+    ports:
+      - "8888:8080"
+
+    depends_on:
+      - keycloak-db
+
+    networks:
+      - backend
+
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+
+
+  keycloak-db:
+
+    image: postgres:15
+
+    container_name: keycloak-db
+
+    environment:
+      - POSTGRES_DB=keycloak
+      - POSTGRES_USER=keycloak
+      - POSTGRES_PASSWORD=keycloak
+
+    ports:
+      - "5433:5432"
+
+    networks:
+      - backend
+    
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/data
+
+
+  sqlserver:
+
+    image: mcr.microsoft.com/azure-sql-edge:latest
+
+    container_name: sqlserver
+    
+    user: "0:0"
+
+    environment:
+      - ACCEPT_EULA=1
+      - MSSQL_SA_PASSWORD=aA123456!
+    
+    ports:
+      - "1433:1433"
+
+    mem_limit: 5G
+    
+    # Azure SQL Edge has lower memory requirements and should run under current Docker Desktop limits
+    
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc 'exec 3<>/dev/tcp/localhost/1433' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    
+    networks:
+      - backend
+
+  rabbitmq:
+    
+    image: rabbitmq:3-management
+    
+    container_name: rabbitmq
+    
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    
+    networks:
+      - backend
+
+  mongodb:
+
+    image: mongo:7.0
+  
+    container_name: mongodb
+  
+    ports:
+      - "1489:27017"
+  
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 2
+    
+    volumes:
+      - mongodb-data:/data/db
+    
+    networks:
+      - backend
+  
+
+  profilesapi:
+  
+    build:
+      context: ../Inno-Clinic.ProfilesApi/ProfilesApi
+      dockerfile: Dockerfile
+  
+    container_name: profilesapi
+  
+    ports:
+      - "8080:8080"
+  
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__sqlConnection=Data Source=sqlserver;Initial Catalog=InnoTest;User ID=sa;Password=aA123456!;TrustServerCertificate=True;MultipleActiveResultSets=true
+      - Serilog__WriteTo__0__Args__databaseUrl=mongodb://mongodb:27017/serilogdb
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=admin
+      - RabbitMQ__Password=admin123
+  
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy 
+    
+    networks:
+      - backend
+
+
+  authapi:
+  
+    build:
+      context: ../Inno-Clinic.AuthApi/AuthApi
+      dockerfile: Dockerfile
+  
+    container_name: authapi
+  
+    ports:
+      - "8081:8081"
+  
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__sqlConnection=Data Source=sqlserver;Initial Catalog=AuthTest;User ID=sa;Password=aA123456!;TrustServerCertificate=True;MultipleActiveResultSets=true
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=admin
+      - RabbitMQ__Password=admin123
+      
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    
+    networks:
+      - backend
+
+
+networks:
+  backend:
+    driver: bridge
+
+
+volumes:
+  keycloak-data:
+  keycloak-db-data:
+  sqlserver-data:
+  mongodb-data:
+  rabbitmq-data:
