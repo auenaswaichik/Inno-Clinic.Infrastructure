@@ -84,6 +84,25 @@ services:
     networks:
       - backend
 
+  rabbitmq:
+    
+    image: rabbitmq:3-management
+    
+    container_name: rabbitmq
+    
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    
+    networks:
+      - backend
 
   mongodb:
 
@@ -122,6 +141,9 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__sqlConnection=Data Source=sqlserver;Initial Catalog=InnoTest;User ID=sa;Password=aA123456!;TrustServerCertificate=True;MultipleActiveResultSets=true
       - Serilog__WriteTo__0__Args__databaseUrl=mongodb://mongodb:27017/serilogdb
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=admin
+      - RabbitMQ__Password=admin123
   
     depends_on:
       sqlserver:
@@ -147,7 +169,10 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__sqlConnection=Data Source=sqlserver;Initial Catalog=AuthTest;User ID=sa;Password=aA123456!;TrustServerCertificate=True;MultipleActiveResultSets=true
-  
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=admin
+      - RabbitMQ__Password=admin123
+      
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -170,3 +195,4 @@ volumes:
   keycloak-db-data:
   sqlserver-data:
   mongodb-data:
+  rabbitmq-data:
